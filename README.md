@@ -37,22 +37,30 @@ Releases are automatically created when you push a version tag (e.g., `v1.0.0`).
 
 ### Using as a Library
 
-You can use `afptool-rs` as a library in your own Rust project. Add it to your `Cargo.toml`:
+You can use `apftool-rs` as a library in your own Rust project. Add it to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-afptool-rs = { git = "https://github.com/suyulin/afptool-rs" }
+apftool-rs = { git = "https://github.com/suyulin/apftool-rs" }
 ```
 
 **Example usage:**
 
 ```rust
-use afptool_rs::{unpack_file, pack_rkfw, pack_rkaf};
+use apftool_rs::{unpack_file, pack_rkfw, pack_rkaf};
 use anyhow::Result;
 
 fn main() -> Result<()> {
     // Unpack a firmware file
     unpack_file("firmware.img", "./output")?;
+
+    // Pack RKAF update image
+    pack_rkaf(
+        "./input",           // input directory
+        "./update.img",      // output file
+        "RK3562",           // model name
+        "RK3562"            // manufacturer
+    )?;
 
     // Pack RKFW firmware
     pack_rkfw(
@@ -62,14 +70,6 @@ fn main() -> Result<()> {
         "1.0.0",            // version
         1762435994,         // unix timestamp
         "0x02000000"        // code field
-    )?;
-
-    // Pack RKAF update image
-    pack_rkaf(
-        "./input",           // input directory
-        "./update.img",      // output file
-        "RK3562",           // model name
-        "RK3562"            // manufacturer
     )?;
 
     Ok(())
