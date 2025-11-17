@@ -35,6 +35,55 @@ Releases are automatically created when you push a version tag (e.g., `v1.0.0`).
 
 ## Usage
 
+### Using as a Library
+
+You can use `afptool-rs` as a library in your own Rust project. Add it to your `Cargo.toml`:
+
+```toml
+[dependencies]
+afptool-rs = { git = "https://github.com/suyulin/afptool-rs" }
+```
+
+**Example usage:**
+
+```rust
+use afptool_rs::{unpack_file, pack_rkfw, pack_rkaf};
+use anyhow::Result;
+
+fn main() -> Result<()> {
+    // Unpack a firmware file
+    unpack_file("firmware.img", "./output")?;
+
+    // Pack RKFW firmware
+    pack_rkfw(
+        "./input",           // input directory
+        "./output.img",      // output file
+        "RK3562",           // chip family
+        "1.0.0",            // version
+        1762435994,         // unix timestamp
+        "0x02000000"        // code field
+    )?;
+
+    // Pack RKAF update image
+    pack_rkaf(
+        "./input",           // input directory
+        "./update.img",      // output file
+        "RK3562",           // model name
+        "RK3562"            // manufacturer
+    )?;
+
+    Ok(())
+}
+```
+
+**Available functions:**
+- `unpack_file(input: &str, output: &str) -> Result<()>` - Unpacks RKFW or RKAF files
+- `pack_rkfw(input: &str, output: &str, chip: &str, version: &str, timestamp: i64, code: &str) -> Result<()>` - Packs RKFW firmware
+- `pack_rkaf(input: &str, output: &str, model: &str, manufacturer: &str) -> Result<()>` - Packs RKAF update images
+- `chip_name_to_code(chip: &str) -> Result<u8>` - Converts chip name to chip code
+
+### Command Line Usage
+
 ### Unpacking
 
 ```bash
