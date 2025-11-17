@@ -1,4 +1,4 @@
-# apftool-rs
+# afptool-rs
 
 A Rust tool for unpacking and packing RockChip firmware images (RKFW and RKAF formats).
 
@@ -37,17 +37,17 @@ Releases are automatically created when you push a version tag (e.g., `v1.0.0`).
 
 ### Using as a Library
 
-You can use `apftool-rs` as a library in your own Rust project. Add it to your `Cargo.toml`:
+You can use `afptool-rs` as a library in your own Rust project. Add it to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-apftool-rs = { git = "https://github.com/suyulin/apftool-rs" }
+afptool-rs = { git = "https://github.com/suyulin/apftool-rs" }
 ```
 
 **Example usage:**
 
 ```rust
-use apftool_rs::{unpack_file, pack_rkfw, pack_rkaf};
+use afptool_rs::{unpack_file, pack_rkfw, pack_rkaf};
 use anyhow::Result;
 
 fn main() -> Result<()> {
