@@ -2,8 +2,8 @@ use std::mem;
 mod pack;
 mod unpack;
 
-pub use pack::{pack_rkfw, pack_rkaf, chip_name_to_code};
-pub use unpack::unpack_file;
+pub use pack::{pack_rkfw, pack_rkaf, chip_name_to_code, PackRkfwResult, PackRkafResult};
+pub use unpack::{unpack_file, UnpackResult, RkfwInfo, RkafInfo, PartitionInfo};
 
 pub const RKAFP_MAGIC: &str = "RKAF";
 pub const PARM_MAGIC: &str = "PARM";

@@ -116,7 +116,7 @@ mod advanced_tests {
         let mut cmd = Command::cargo_bin("afptool-rs").unwrap();
         cmd.assert()
             .failure()
-            .stderr(predicate::str::contains("the following required arguments were not provided:"));
+            .stderr(predicate::str::contains("Usage: afptool-rs <COMMAND>"));
     }
 
     #[test]

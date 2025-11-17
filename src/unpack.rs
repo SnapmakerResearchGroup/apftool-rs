@@ -5,23 +5,66 @@ use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
 use crate::{RKAF_SIGNATURE, RKFW_SIGNATURE, UpdateHeader, RKAFP_MAGIC};
 
-pub fn unpack_file(file_path: &str, dst_path: &str) -> Result<()> {
+#[derive(Debug, Clone)]
+pub struct RkfwInfo {
+    pub version: String,
+    pub code: u32,
+    pub timestamp: i64,
+    pub chip_family: String,
+    pub chip_code: u8,
+    pub boot_offset: u32,
+    pub boot_size: u32,
+    pub update_offset: u32,
+    pub update_size: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct PartitionInfo {
+    pub name: String,
+    pub path: String,
+    pub flash_size: u32,
+    pub flash_offset: u32,
+    pub part_offset: u32,
+    pub padded_size: u32,
+    pub part_byte_count: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct RkafInfo {
+    pub manufacturer: String,
+    pub model: String,
+    pub filesize: u64,
+    pub partitions: Vec<PartitionInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub enum UnpackResult {
+    Rkfw(RkfwInfo),
+    Rkaf(RkafInfo),
+}
+
+pub fn unpack_file(file_path: &str, dst_path: &str) -> Result<UnpackResult> {
     let mut file = File::open(file_path)?;
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
 
     let signature = &buffer[0..4];
     match signature {
-        RKAF_SIGNATURE => unpack_rkafp(file_path, dst_path)?,
-        RKFW_SIGNATURE => unpack_rkfw(&buffer, dst_path)?,
+        RKAF_SIGNATURE => {
+            let info = unpack_rkafp(file_path, dst_path)?;
+            Ok(UnpackResult::Rkaf(info))
+        }
+        RKFW_SIGNATURE => {
+            let info = unpack_rkfw(&buffer, dst_path)?;
+            Ok(UnpackResult::Rkfw(info))
+        }
         _ => {
-            return Err(anyhow!("Unknown signature: {:?}", signature));
+            Err(anyhow!("Unknown signature: {:?}", signature))
         }
     }
-    Ok(())
 }
 
-fn unpack_rkfw(buf: &[u8], dst_path: &str) -> Result<()> {
+fn unpack_rkfw(buf: &[u8], dst_path: &str) -> Result<RkfwInfo> {
     let mut chip: Option<&str> = None;
 
     println!("RKFW signature detected");
@@ -56,7 +99,8 @@ fn unpack_rkfw(buf: &[u8], dst_path: &str) -> Result<()> {
         year, month, day, hour, minute, second, unix_timestamp
     );
 
-    match buf[0x15] {
+    let chip_code = buf[0x15];
+    match chip_code {
         0x50 => chip = Some("RK29xx"),
         0x60 => chip = Some("RK30xx"),
         0x70 => chip = Some("RK31xx"),
@@ -68,52 +112,63 @@ fn unpack_rkfw(buf: &[u8], dst_path: &str) -> Result<()> {
         0x30 => chip = Some("PX30"),
         _ => println!(
             "You got a brand new chip ({:#x}), congratulations!!!",
-            buf[0x15]
+            chip_code
         ),
     }
 
     let chip_name = chip.unwrap_or("unknown");
     println!("family: {}", chip_name);
 
-    let ioff = get_u32_le(&buf[0x19..]);
-    let isize: u32 = get_u32_le(&buf[0x1d..]);
+    let boot_offset = get_u32_le(&buf[0x19..]);
+    let boot_size: u32 = get_u32_le(&buf[0x1d..]);
 
-    // if &buf[ioff as usize..ioff as usize + 4] != b"BOOT" {
+    // if &buf[boot_offset as usize..boot_offset as usize + 4] != b"BOOT" {
     //     panic!("cannot find BOOT signature");
     // }
 
     println!(
         "{:08x}-{:08x} {:26} (size: {})",
-        ioff,
-        ioff + isize - 1,
+        boot_offset,
+        boot_offset + boot_size - 1,
         "BOOT",
-        isize
+        boot_size
     );
     std::fs::create_dir_all(dst_path)?;
     write_file(
         &Path::new(&format!("{}/BOOT", dst_path)),
-        &buf[ioff as usize..ioff as usize + (isize as usize)],
+        &buf[boot_offset as usize..boot_offset as usize + (boot_size as usize)],
     )?;
 
-    let ioff = get_u32_le(&buf[0x21..]);
-    let isize = get_u32_le(&buf[0x25..]);
+    let update_offset = get_u32_le(&buf[0x21..]);
+    let update_size = get_u32_le(&buf[0x25..]);
 
-    if &buf[ioff as usize..ioff as usize + 4] != b"RKAF" {
+    if &buf[update_offset as usize..update_offset as usize + 4] != b"RKAF" {
         panic!("cannot find embedded RKAF update.img");
     }
 
     println!(
         "{:08x}-{:08x} {:26} (size: {})",
-        ioff,
-        ioff + isize - 1,
+        update_offset,
+        update_offset + update_size - 1,
         "embedded-update.img",
-        isize
+        update_size
     );
     write_file(
         &Path::new(&format!("{}/embedded-update.img", dst_path)),
-        &buf[ioff as usize..ioff as usize + isize as usize],
+        &buf[update_offset as usize..update_offset as usize + update_size as usize],
     )?;
-    Ok(())
+
+    Ok(RkfwInfo {
+        version: version_str,
+        code,
+        timestamp: unix_timestamp,
+        chip_family: chip_name.to_string(),
+        chip_code,
+        boot_offset,
+        boot_size,
+        update_offset,
+        update_size,
+    })
 }
 
 fn extract_file(fp: &mut File, offset: u64, len: u64, full_path: &str) -> Result<()> {
@@ -141,7 +196,7 @@ fn extract_file(fp: &mut File, offset: u64, len: u64, full_path: &str) -> Result
     Ok(())
 }
 
-fn unpack_rkafp(file_path: &str, dst_path: &str) -> Result<()> {
+fn unpack_rkafp(file_path: &str, dst_path: &str) -> Result<RkafInfo> {
     use std::mem;
 
     let mut fp = File::open(file_path)?;
@@ -161,11 +216,11 @@ fn unpack_rkafp(file_path: &str, dst_path: &str) -> Result<()> {
     std::fs::create_dir_all(format!("{}/Image", dst_path))?;
     // 安全地从null-terminated字符串中提取文本
     let manufacturer = std::ffi::CStr::from_bytes_until_nul(&header.manufacturer)
-        .map(|s| s.to_string_lossy())
-        .unwrap_or_else(|_| "unknown".into());
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "unknown".to_string());
     let model = std::ffi::CStr::from_bytes_until_nul(&header.model)
-        .map(|s| s.to_string_lossy())
-        .unwrap_or_else(|_| "unknown".into());
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "unknown".to_string());
 
     println!("manufacturer: {}", manufacturer);
     println!("model: {}", model);
@@ -173,6 +228,7 @@ fn unpack_rkafp(file_path: &str, dst_path: &str) -> Result<()> {
     // Save partition metadata for repacking
     let metadata_path = format!("{}/partition-metadata.txt", dst_path);
     let mut metadata_file = File::create(&metadata_path)?;
+    let mut partitions = Vec::new();
 
     for i in 0..header.num_parts {
         let part = &header.parts[i as usize];
@@ -207,6 +263,16 @@ fn unpack_rkafp(file_path: &str, dst_path: &str) -> Result<()> {
                 part_byte_count
             )?;
 
+            partitions.push(PartitionInfo {
+                name: part_name.clone(),
+                path: part_full_path.to_string(),
+                flash_size,
+                flash_offset,
+                part_offset,
+                padded_size,
+                part_byte_count,
+            });
+
             let part_full_path = format!("{}/{}", dst_path, part_full_path);
             extract_file(
                 &mut fp,
@@ -219,7 +285,12 @@ fn unpack_rkafp(file_path: &str, dst_path: &str) -> Result<()> {
 
     println!("\nPartition metadata saved to: {}", metadata_path);
 
-    Ok(())
+    Ok(RkafInfo {
+        manufacturer,
+        model,
+        filesize,
+        partitions,
+    })
 }
 
 fn get_u32_le(slice: &[u8]) -> u32 {

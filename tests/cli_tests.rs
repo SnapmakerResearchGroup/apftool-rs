@@ -91,9 +91,7 @@ mod integration_tests {
         cmd.assert()
             .success()
             .stdout(predicate::str::contains("afptool-rs"))
-            .stdout(predicate::str::contains("A Rust tool for unpacking RockChip firmware images"))
-            .stdout(predicate::str::contains("Path to the firmware file"))
-            .stdout(predicate::str::contains("Directory where extracted files will be saved"));
+            .stdout(predicate::str::contains("A Rust tool for packing and unpacking RockChip firmware images"));
     }
     
     #[test]

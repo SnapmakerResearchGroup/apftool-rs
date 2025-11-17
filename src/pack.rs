@@ -12,6 +12,35 @@ struct PartitionMetadata {
     padded_size: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct PackRkfwResult {
+    pub output_file: String,
+    pub version: String,
+    pub major: u8,
+    pub minor: u8,
+    pub build: u16,
+    pub timestamp: i64,
+    pub date_string: String,
+    pub chip: String,
+    pub chip_code: u8,
+    pub code: u32,
+    pub boot_size: u32,
+    pub update_size: u32,
+    pub md5: String,
+    pub total_size: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct PackRkafResult {
+    pub output_file: String,
+    pub model: String,
+    pub manufacturer: String,
+    pub machine_id: Option<String>,
+    pub num_parts: u32,
+    pub total_size: usize,
+    pub checksum: u32,
+}
+
 // RockChip CRC-32 table
 const RKCRC32_TABLE: [u32; 256] = [
     0x00000000, 0x04c10db7, 0x09821b6e, 0x0d4316d9,
@@ -124,7 +153,7 @@ fn parse_partition_metadata(input_dir: &str) -> Result<HashMap<String, Partition
     Ok(metadata_map)
 }
 
-pub fn pack_rkfw(input_dir: &str, output_file: &str, chip: &str, version: &str, timestamp: i64, code_hex: &str) -> Result<()> {
+pub fn pack_rkfw(input_dir: &str, output_file: &str, chip: &str, version: &str, timestamp: i64, code_hex: &str) -> Result<PackRkfwResult> {
     let hex_str = code_hex.trim_start_matches("0x").trim_start_matches("0X");
     let code_value = u32::from_str_radix(hex_str, 16)
         .map_err(|_| anyhow!("Invalid hex value for code field: {}", hex_str))?;
@@ -238,17 +267,34 @@ pub fn pack_rkfw(input_dir: &str, output_file: &str, chip: &str, version: &str, 
 
     let total_size = file_data.len() + md5_hex.len();
 
+    let date_string = format!("{}-{:02}-{:02} {:02}:{:02}:{:02}", year, month, day, hour, minute, second);
+
     println!("Successfully packed RKFW image:");
     println!("  Output: {}", output_file);
     println!("  Version: {}.{}.{}", major, minor, build);
-    println!("  Date: {}-{:02}-{:02} {:02}:{:02}:{:02}", year, month, day, hour, minute, second);
+    println!("  Date: {}", date_string);
     println!("  Chip: {} (code: 0x{:02x})", chip, chip_code);
     println!("  BOOT size: {} bytes", boot_size);
     println!("  Update image size: {} bytes", update_size);
     println!("  MD5: {}", md5_hex);
     println!("  Total size: {} bytes", total_size);
 
-    Ok(())
+    Ok(PackRkfwResult {
+        output_file: output_file.to_string(),
+        version: version.to_string(),
+        major,
+        minor,
+        build,
+        timestamp,
+        date_string,
+        chip: chip.to_string(),
+        chip_code,
+        code: code_value,
+        boot_size,
+        update_size,
+        md5: md5_hex,
+        total_size,
+    })
 }
 
 pub fn chip_name_to_code(chip: &str) -> Result<u8> {
@@ -274,7 +320,7 @@ fn put_u32_le(slice: &mut [u8], value: u32) {
     slice[3] = bytes[3];
 }
 
-pub fn pack_rkaf(input_dir: &str, output_file: &str, model: &str, manufacturer: &str) -> Result<()> {
+pub fn pack_rkaf(input_dir: &str, output_file: &str, model: &str, manufacturer: &str) -> Result<PackRkafResult> {
     let package_file_path = format!("{}/package-file", input_dir);
     let package_file = File::open(&package_file_path)
         .map_err(|_| anyhow!("Cannot find package-file in {}", input_dir))?;
@@ -447,5 +493,13 @@ pub fn pack_rkaf(input_dir: &str, output_file: &str, model: &str, manufacturer: 
     println!("  Parts: {}", num_parts);
     println!("  Total size: {} bytes", current_offset);
 
-    Ok(())
+    Ok(PackRkafResult {
+        output_file: output_file.to_string(),
+        model: model.to_string(),
+        manufacturer: manufacturer.to_string(),
+        machine_id: if machine_id.is_empty() { None } else { Some(machine_id) },
+        num_parts,
+        total_size: current_offset,
+        checksum,
+    })
 }

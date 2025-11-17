@@ -47,23 +47,35 @@ afptool-rs = { git = "https://github.com/suyulin/apftool-rs" }
 **Example usage:**
 
 ```rust
-use afptool_rs::{unpack_file, pack_rkfw, pack_rkaf};
+use afptool_rs::{unpack_file, pack_rkfw, pack_rkaf, UnpackResult};
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    // Unpack a firmware file
-    unpack_file("firmware.img", "./output")?;
+    // Unpack a firmware file - returns metadata about the unpacked file
+    let result = unpack_file("firmware.img", "./output")?;
 
-    // Pack RKAF update image
-    pack_rkaf(
-        "./input",           // input directory
-        "./update.img",      // output file
-        "RK3562",           // model name
-        "RK3562"            // manufacturer
-    )?;
+    match result {
+        UnpackResult::Rkfw(info) => {
+            println!("Unpacked RKFW:");
+            println!("  Version: {}", info.version);
+            println!("  Chip: {} (code: 0x{:02x})", info.chip_family, info.chip_code);
+            println!("  Timestamp: {}", info.timestamp);
+            println!("  Boot size: {} bytes", info.boot_size);
+            println!("  Update size: {} bytes", info.update_size);
+        }
+        UnpackResult::Rkaf(info) => {
+            println!("Unpacked RKAF:");
+            println!("  Model: {}", info.model);
+            println!("  Manufacturer: {}", info.manufacturer);
+            println!("  Partitions: {}", info.partitions.len());
+            for partition in &info.partitions {
+                println!("    - {}: {} bytes", partition.name, partition.part_byte_count);
+            }
+        }
+    }
 
-    // Pack RKFW firmware
-    pack_rkfw(
+    // Pack RKFW firmware - returns metadata about the packed file
+    let rkfw_result = pack_rkfw(
         "./input",           // input directory
         "./output.img",      // output file
         "RK3562",           // chip family
@@ -71,15 +83,31 @@ fn main() -> Result<()> {
         1762435994,         // unix timestamp
         "0x02000000"        // code field
     )?;
+    println!("Created RKFW: {} (MD5: {})", rkfw_result.output_file, rkfw_result.md5);
+
+    // Pack RKAF update image - returns metadata about the packed file
+    let rkaf_result = pack_rkaf(
+        "./input",           // input directory
+        "./update.img",      // output file
+        "RK3562",           // model name
+        "RK3562"            // manufacturer
+    )?;
+    println!("Created RKAF: {} with {} parts", rkaf_result.output_file, rkaf_result.num_parts);
 
     Ok(())
 }
 ```
 
-**Available functions:**
-- `unpack_file(input: &str, output: &str) -> Result<()>` - Unpacks RKFW or RKAF files
-- `pack_rkfw(input: &str, output: &str, chip: &str, version: &str, timestamp: i64, code: &str) -> Result<()>` - Packs RKFW firmware
-- `pack_rkaf(input: &str, output: &str, model: &str, manufacturer: &str) -> Result<()>` - Packs RKAF update images
+**Available functions and return types:**
+
+- `unpack_file(input: &str, output: &str) -> Result<UnpackResult>` - Unpacks RKFW or RKAF files
+  - Returns `UnpackResult::Rkfw(RkfwInfo)` or `UnpackResult::Rkaf(RkafInfo)` with detailed metadata
+
+- `pack_rkfw(input: &str, output: &str, chip: &str, version: &str, timestamp: i64, code: &str) -> Result<PackRkfwResult>` - Packs RKFW firmware
+  - Returns `PackRkfwResult` with version, chip info, sizes, MD5, etc.
+
+- `pack_rkaf(input: &str, output: &str, model: &str, manufacturer: &str) -> Result<PackRkafResult>` - Packs RKAF update images
+  - Returns `PackRkafResult` with model, manufacturer, partition count, checksum, etc.
 - `chip_name_to_code(chip: &str) -> Result<u8>` - Converts chip name to chip code
 
 ### Command Line Usage
